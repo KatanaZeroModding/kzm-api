@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate kzm-api.json
+        shell: bash
+        run: |
+          python - << 'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("kzm-api.json").read_text(encoding="utf-8"))
+          required = ("apiVersion", "game", "dataWinSha256", "indexSource", "scripts", "objects")
+          missing = [key for key in required if key not in data]
+          if missing:
+              raise SystemExit(f"missing keys: {', '.join(missing)}")
+          if data["apiVersion"] != 2:
+              raise SystemExit(f"expected apiVersion 2, got {data['apiVersion']}")
+          sha = data["dataWinSha256"]
+          if not isinstance(sha, str) or len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha.lower()):
+              raise SystemExit("dataWinSha256 must be 64 hex characters")
+          for key in ("scripts", "objects"):
+              values = data[key]
+              if not isinstance(values, list) or not values:
+                  raise SystemExit(f"{key} must be a non-empty list")
+          print(
+              f"ok apiVersion={data['apiVersion']} "
+              f"scripts={len(data['scripts'])} objects={len(data['objects'])}"
+          )
+          PY
